@@ -10,7 +10,7 @@ from flask_cors import CORS, cross_origin
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "https://front-end-set-list.vercel.app"}})
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
