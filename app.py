@@ -32,7 +32,12 @@ def get_lyrics_with_retry(name, artists, genius):
     return "Timeout ao obter a letra"
 
 
-@app.route('/api/get_lyrics', methods=['POST'])
+@app.route('/', methods=['GET'])
+def index():
+    return "Servidor em execução! Acesse a API em /api/get_lyrics"
+
+
+@app.route('/api/get_lyrics', methods=['POST', 'GET'])
 @cross_origin()
 def get_lyrics():
     if request.method == 'POST':
@@ -71,8 +76,8 @@ def get_lyrics():
             lyrics_list.append({"name": name, "artists": artists, "lyrics": lyrics})
 
         return jsonify({"lyrics": lyrics_list})
-
-
+    elif request.method == 'GET':
+        return "Use o método POST para obter letras. Consulte a documentação para mais detalhes."
 
 
 if __name__ == '__main__':
