@@ -12,24 +12,10 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "https://front-end-set-list.vercel.app"}})
 
+
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 genius_token = os.getenv("GENIUS_ACCESS_TOKEN")
-
-
-def get_lyrics_with_retry(name, artists, genius):
-    for _ in range(3):  # Tenta até 3 vezes em caso de timeout
-        try:
-            genius_song = genius.search_song(name, artists)
-            if genius_song:
-                return genius_song.lyrics
-            else:
-                return "Letra não encontrada"
-        except TimeoutError:
-            # Tratamento específico para timeout
-            pass
-
-    return "Timeout ao obter a letra"
 
 
 @app.route('/', methods=['GET'])
@@ -37,7 +23,7 @@ def index():
     return "Servidor em execução! Acesse a API em /api/get_lyrics"
 
 
-@app.route('/api/get_lyrics', methods=['POST', 'GET'])
+@app.route('/api/get_lyrics', methods=['POST'])
 @cross_origin()
 def get_lyrics():
     if request.method == 'POST':
@@ -70,10 +56,12 @@ def get_lyrics():
                 [artist["name"] for artist in track["track"]["artists"]]
             )
 
-            # Search for lyrics on Genius with retry logic
-            lyrics = get_lyrics_with_retry(name, artists, genius)
-
-            lyrics_list.append({"name": name, "artists": artists, "lyrics": lyrics})
+            # Search for lyrics on Genius
+            genius_song = genius.search_song(name, artists)
+            if genius_song:
+                lyrics_list.append({"name": name, "artists": artists, "lyrics": genius_song.lyrics})
+            else:
+                lyrics_list.append({"name": name, "artists": artists, "lyrics": "Letra não encontrada"})
 
         return jsonify({"lyrics": lyrics_list})
     elif request.method == 'GET':
