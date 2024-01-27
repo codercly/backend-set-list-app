@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import requests
 import os
 import re
 import lyricsgenius
@@ -28,6 +29,14 @@ def index():
 def get_lyrics():
     if request.method == 'POST':
         playlist_link = request.json.get('playlist_link')
+
+        try:
+            response = requests.get(playlist_link, timeout=10)
+            response.raise_for_status()
+        except requests.exceptions.Timeout:
+            return jsonify({"error": "A solicitação excedeu o tempo limite."}), 500
+        except requests.exceptions.HTTPError as e:
+            return jsonify({"error": f"Erro ao acessar a playlist: {e}"}), 500
 
         # Get URI from https link
         if match := re.match(r"https://open.spotify.com/playlist/(.*)\?", playlist_link):
