@@ -11,7 +11,7 @@ from flask_cors import CORS, cross_origin
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "https://front-end-set-list.vercel.app"}})
+CORS(app, resources={r"/api/*": {"origins": "https://front-end-set-list.vercel.app"}}, support_credentials=True)
 
 
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -25,7 +25,7 @@ def index():
 
 
 @app.route('/api/get_lyrics', methods=['POST'])
-@cross_origin()
+@cross_origin(supports_credentials=True)
 def get_lyrics():
     if request.method == 'POST':
         playlist_link = request.json.get('playlist_link')
