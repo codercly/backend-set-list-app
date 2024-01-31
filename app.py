@@ -13,7 +13,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['JSONIFY_TIMEOUT'] = 60
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "https://front-end-set-list.vercel.app"}}, support_credentials=True)
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
