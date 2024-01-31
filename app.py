@@ -74,7 +74,7 @@ def get_lyrics():
 
         tracks = session.playlist_tracks(playlist_uri)["items"]
 
-        page_size = 10
+        page_size = 5
         total_tracks = len(tracks)
         num_pages = (total_tracks + page_size - 1) // page_size
 
