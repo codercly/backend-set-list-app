@@ -37,7 +37,7 @@ def get_playlist_uri(playlist_link):
 
 
 def get_genius_lyrics(name, artists):
-    genius = lyricsgenius.Genius(genius_token, timeout=15)
+    genius = lyricsgenius.Genius(genius_token, timeout=20)
     genius_song = genius.search_song(name, artists)
     return genius_song.lyrics if genius_song else "Letra não encontrada"
 
