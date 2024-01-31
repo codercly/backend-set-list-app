@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-import requests
 import os
 import re
 import lyricsgenius
@@ -8,15 +7,53 @@ from dotenv import load_dotenv
 from spotipy.oauth2 import SpotifyClientCredentials
 from flask_cors import CORS, cross_origin
 
+from concurrent.futures import ThreadPoolExecutor
+
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "https://front-end-set-list.vercel.app"}}, support_credentials=True)
-
+app.config['JSONIFY_TIMEOUT'] = 60
+CORS(app)
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 genius_token = os.getenv("GENIUS_ACCESS_TOKEN")
+
+executor = ThreadPoolExecutor()
+
+lyrics_cache = {}
+
+
+def get_spotify_session():
+    client_credentials_manager = SpotifyClientCredentials(
+        client_id=CLIENT_ID, client_secret=CLIENT_SECRET
+    )
+    return spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+
+def get_playlist_uri(playlist_link):
+    match = re.match(r"https://open.spotify.com/playlist/(.*)\?", playlist_link)
+    return match.groups()[0] if match else None
+
+
+def get_genius_lyrics(name, artists):
+    genius = lyricsgenius.Genius(genius_token, timeout=15)
+    genius_song = genius.search_song(name, artists)
+    return genius_song.lyrics if genius_song else "Letra não encontrada"
+
+
+def process_track(track):
+    name = track["track"]["name"]
+    artists = ", ".join([artist["name"] for artist in track["track"]["artists"]])
+
+    cache_key = f"{name}_{artists}"
+    if cache_key in lyrics_cache:
+        lyrics = lyrics_cache[cache_key]
+    else:
+        lyrics = get_genius_lyrics(name, artists)
+        lyrics_cache[cache_key] = lyrics
+
+    return {"name": name, "artists": artists, "lyrics": lyrics}
 
 
 @app.route('/', methods=['GET'])
@@ -24,57 +61,37 @@ def index():
     return "Servidor em execução! Acesse a API em /api/get_lyrics"
 
 
-@app.route('/api/get_lyrics', methods=['POST'])
+@app.route('/api/get_lyrics', methods=['POST', 'GET'])
 @cross_origin(supports_credentials=True)
 def get_lyrics():
     if request.method == 'POST':
         playlist_link = request.json.get('playlist_link')
+        session = get_spotify_session()
 
-        try:
-            response = requests.get(playlist_link, timeout=10)
-            response.raise_for_status()
-        except requests.exceptions.Timeout:
-            return jsonify({"error": "A solicitação excedeu o tempo limite."}), 500
-        except requests.exceptions.HTTPError as e:
-            return jsonify({"error": f"Erro ao acessar a playlist: {e}"}), 500
+        playlist_uri = get_playlist_uri(playlist_link)
+        if not playlist_uri:
+            return jsonify({"error": "link da playlist inválido"}), 400
 
-        # Get URI from https link
-        if match := re.match(r"https://open.spotify.com/playlist/(.*)\?", playlist_link):
-            playlist_uri = match.groups()[0]
-        else:
-            return jsonify({"error": "Invalid playlist link"}), 400
-
-        # Authenticate with Spotify
-        client_credentials_manager = SpotifyClientCredentials(
-            client_id=CLIENT_ID, client_secret=CLIENT_SECRET
-        )
-        session = spotipy.Spotify(
-            client_credentials_manager=client_credentials_manager
-        )
-
-        # Get list of tracks in the given playlist (note: max playlist length 100)
         tracks = session.playlist_tracks(playlist_uri)["items"]
 
-        genius = lyricsgenius.Genius(genius_token)
+        page_size = 10
+        total_tracks = len(tracks)
+        num_pages = (total_tracks + page_size - 1) // page_size
+
         lyrics_list = []
 
-        # Extract name and artist for each track
-        for track in tracks:
-            name = track["track"]["name"]
-            artists = ", ".join(
-                [artist["name"] for artist in track["track"]["artists"]]
-            )
+        for page in range(num_pages):
+            start_index = page * page_size
+            end_index = (page + 1) * page_size
+            current_tracks = tracks[start_index:end_index]
 
-            # Search for lyrics on Genius
-            genius_song = genius.search_song(name, artists)
-            if genius_song:
-                lyrics_list.append({"name": name, "artists": artists, "lyrics": genius_song.lyrics})
-            else:
-                lyrics_list.append({"name": name, "artists": artists, "lyrics": "Letra não encontrada"})
+            futures = [executor.submit(process_track, track) for track in current_tracks]
+            lyrics_list.extend([future.result() for future in futures])
 
-        return jsonify({"lyrics": lyrics_list})
+        return jsonify({"lyrics":lyrics_list})
+
     elif request.method == 'GET':
-        return "Use o método POST para obter letras. Consulte a documentação para mais detalhes."
+        return "Use o método POST para obter as letras"
 
 
 if __name__ == '__main__':
